@@ -12,7 +12,7 @@ func main() {
 	flag.Parse()
 
 	i := 0
-	for l := 1; l < *chars; l++ {
+	for l := 1; l < *chars+1; l++ {
 		np := next(l)
 
 		for {
@@ -29,6 +29,8 @@ func main() {
 			run(n)
 		}
 	}
+	
+	fmt.Printf("Ran %d inputs\n", i)
 }
 
 func run(module []byte) {
