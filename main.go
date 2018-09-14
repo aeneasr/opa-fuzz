@@ -4,6 +4,10 @@ import (
 	"fmt"
 	"flag"
 	"github.com/open-policy-agent/opa/ast"
+	"github.com/open-policy-agent/opa/rego"
+	"context"
+	"runtime"
+	"strings"
 )
 
 func main() {
@@ -36,7 +40,7 @@ func main() {
 func run(module []byte) {
     defer func() {
         if r := recover(); r != nil {
-            fmt.Printf("Panic caused by \"%s\" was thrown with payload %x\n", r, module)
+            fmt.Printf("Panic caused by \"%+v\" was thrown with payload %x (%s)\n%s\n\n", r, module, module, panicInfo())
         }
     }()
 
@@ -56,6 +60,19 @@ func run(module []byte) {
 
 	if compiler.Failed() {
 		fmt.Printf("Unable to compile module with payload %s ( %x ): %s", module, module, compiler.Errors)
+		return
+	}
+
+	rego := rego.New(
+	    rego.Query(string(module)),
+	    rego.Compiler(compiler),
+	    rego.Input(interface{}(module)),
+	)
+
+	// Run evaluation.
+	if _, err := rego.Eval(context.TODO()); err != nil {
+		fmt.Printf("Unable to eval with payload %s ( %x ): %s", module, module, err)
+		return
 	}
 }
 
@@ -81,4 +98,32 @@ func next(n int) func() []byte {
         }
         return p
     }
+}
+
+func panicInfo() string {
+	var name, file string
+	var line int
+	var pc [16]uintptr
+	
+	n := runtime.Callers(3, pc[:])
+	for _, pc := range pc[:n] {
+		fn := runtime.FuncForPC(pc)
+		if fn == nil {
+			continue
+		}
+		file, line = fn.FileLine(pc)
+		name = fn.Name()
+		if !strings.HasPrefix(name, "runtime.") {
+			break
+		}
+	}
+	
+	switch {
+	case name != "":
+		return fmt.Sprintf("%v:%v", name, line)
+	case file != "":
+		return fmt.Sprintf("%v:%v", file, line)
+	}
+	
+	return fmt.Sprintf("pc:%x", pc)
 }
