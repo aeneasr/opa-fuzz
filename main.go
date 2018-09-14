@@ -70,9 +70,14 @@ func run(module []byte) {
 	)
 
 	// Run evaluation.
-	if _, err := rego.Eval(context.TODO()); err != nil {
+	rs, err := rego.Eval(context.TODO())
+	if err != nil {
 		fmt.Printf("Unable to eval with payload %s ( %x ): %s", module, module, err)
 		return
+	}
+
+	if len(rs) > 0 {
+		panic(fmt.Sprintf("It's suspicious that a result was found, got %d results: %+v", len(rs), rs))
 	}
 }
 
