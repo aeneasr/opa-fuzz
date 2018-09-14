@@ -1,19 +1,23 @@
 package main
 
 import (
-	"os/exec"
-	"io/ioutil"
 	"fmt"
+	"flag"
+	"github.com/open-policy-agent/opa/ast"
 )
 
 func main() {
+	var chars = flag.Int("len", 4, "Maximum content length")
+	var every = flag.Int("every", 100000, "Show status every X runs")
+	flag.Parse()
+
 	i := 0
-	for l := 1; l <= 3; l++ {
+	for l := 1; l < *chars; l++ {
 		np := next(l)
 
 		for {
 			n := np()
-			if i % 500 == 0 {
+			if i % *every == 0 {
 				fmt.Printf("Got next (%d) for %d at %d\n", len(n), l, i)
 			}
 			i++
@@ -22,17 +26,34 @@ func main() {
 				break
 			}
 
-			if err := ioutil.WriteFile("fuzz.rego", n, 0644); err != nil {
-				panic(err)
-			}
-
-			c := exec.Command("opa", "run", "fuzz.rego")
-			if err := c.Run(); err != nil {
-				if err.Error() != "exit status 1" {
-					fmt.Printf("Payload %s ( %x ) caused error %s\n", n, n, err)
-				}
-			}
+			run(n)
 		}
+	}
+}
+
+func run(module []byte) {
+    defer func() {
+        if r := recover(); r != nil {
+            fmt.Printf("Panic caused by \"%s\" was thrown with payload %x\n", r, module)
+        }
+    }()
+
+
+	parsed, err := ast.ParseModule("example.rego", string(module))
+	if err != nil {
+		// This is fine
+		// fmt.Printf("Unable to parse module with payload %s ( %x ): %s", module, module, err)
+		return
+	}
+
+	compiler := ast.NewCompiler()
+	compiler.Compile(map[string]*ast.Module{
+	    "example.rego": parsed,
+	})
+
+
+	if compiler.Failed() {
+		fmt.Printf("Unable to compile module with payload %s ( %x ): %s", module, module, compiler.Errors)
 	}
 }
 
